@@ -259,7 +259,7 @@ qemu-system-x86_64 \
   -device pxb-cxl,bus_nr=12,bus=pcie.0,id=cxl.1,hdm_for_passthrough=true \
   -device cxl-rp,port=0,bus=cxl.1,id=cxlrp0,chassis=0,slot=2,pref64-reserve=2G,mem-reserve=1G \
   -device vfio-pci-nohotplug,host=0000:35:00.0,bus=cxlrp0,id=cxldev0,iommufd=iommufd0 \
-  -M q35,cxl-fmw.0.targets.0=cxl.1,cxl-fmw.0.size=4G,cxl=on \
+  -M q35,cxl-fmw.0.targets.0=cxl.1,cxl-fmw.0.size=512M,cxl=on \
   ...
 ```
 
