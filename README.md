@@ -186,13 +186,19 @@ CXL type-2 device is passed through from L1 to L2 via vfio-pci.
 
 This requires the following series (not yet upstream):
 
-Kernel:
+Kernel 7.3:
 - [\[v12 00/12\] PCI/CXL: Add CXL reset support for Type 2 devices (Srirangan Madhavan)](https://lore.kernel.org/all/20260910070808.1444264-1-smadhavan@nvidia.com)
 - [\[v5 00/27\] vfio/pci: Add CXL Type-2 device passthrough support (Manish Honap)](https://lore.kernel.org/all/20260916183540.3813685-1-mhonap@nvidia.com)
-- [Pre-built Linux tree with all patches applied](https://github.com/legoater/linux/commits/vfio/)
+- [Pre-built Linux tree with all patches applied](https://github.com/legoater/linux/commits/vfio-7.3/)
+
+Kernel 7.4:
+- [(v15) PCI/CXL: Add CXL reset support for Type 2 devices](https://lore.kernel.org/all/20261011021422.3428136-2-smadhavan@nvidia.com)
+- [(v6) vfio/pci: Add CXL Type-2 device passthrough](https://lore.kernel.org/all/20261016161839.2765592-2-mhonap@nvidia.com)
+- [(v3) Add SMCCC cache clean/invalidate provider](https://lore.kernel.org/all/20260910082142.1522865-2-smadhavan@nvidia.com)
+- [Pre-built Linux tree with all series applied and extras](https://github.com/legoater/linux/commits/vfio-7.4/)
 
 QEMU:
-- [\[PATCH v2 00/10\] QEMU: CXL Type-2 device passthrough via vfio-pci (Manish Honap)](https://lore.kernel.org/all/20260916184412.3825713-1-mhonap@nvidia.com/)
+- [(v2) QEMU: CXL Type-2 device passthrough via vfio-pci (Manish Honap)](https://lore.kernel.org/all/20260916184412.3825713-1-mhonap@nvidia.com/)
 - Extra patches: HB HDM decoder commit in pxb-cxl for auto-region, `hdm_for_passthrough=true` requirement, DVSEC range base fix, and build stubs
 - [Pre-built QEMU tree with all patches applied](https://github.com/legoater/qemu/commits/vfio-11.2)
 
