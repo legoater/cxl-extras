@@ -24,12 +24,12 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <linux/fs.h>
+#include <dirent.h>
 #include <errno.h>
 
 #include "cxl_type2.h"
 
 #define DEFAULT_ACCEL_DEV	"/dev/cxl-accel0"
-#define DEFAULT_DAX_DEV		"/dev/dax0.0"
 #define DEFAULT_SIZE_KB		4
 #define ALIGN_UP(x, a)		(((x) + (a) - 1) & ~((a) - 1))
 
@@ -40,13 +40,13 @@ static void usage(const char *prog)
 		"\n"
 		"Options:\n"
 		"  -a <dev>   Accelerator device (default: %s)\n"
-		"  -d <dev>   DAX device for CXL memory (default: %s)\n"
+		"  -d <dev>   DAX device for CXL memory (auto-discovered if omitted)\n"
 		"  -s <kb>    Pattern size in KB when no file given (default: %d)\n"
 		"  -h         Show this help\n"
 		"\n"
 		"If input_file is given, its contents are compressed.\n"
 		"Otherwise a synthetic pattern is generated.\n",
-		prog, DEFAULT_ACCEL_DEV, DEFAULT_DAX_DEV, DEFAULT_SIZE_KB);
+		prog, DEFAULT_ACCEL_DEV, DEFAULT_SIZE_KB);
 }
 
 static int submit_cmd(int accel_fd, uint32_t opcode,
@@ -126,6 +126,108 @@ static ssize_t file_size(const char *path)
 	return st.st_size;
 }
 
+/*
+ * Find the DAX device matching an accelerator device by tracing sysfs:
+ *   /dev/cxl-accelN -> PCI BDF -> memdev -> endpoint -> decoder -> region -> daxN.0
+ */
+static int find_dax_for_accel(const char *accel_path, char *dax_path, size_t len)
+{
+	const char *accel_name;
+	char path[512], link[512], pci_bdf[16] = {};
+	char memdev[NAME_MAX + 1] = {}, ep_decoder[32] = {};
+	ssize_t n;
+	DIR *dir;
+	struct dirent *de;
+
+	accel_name = strrchr(accel_path, '/');
+	accel_name = accel_name ? accel_name + 1 : accel_path;
+
+	/* Step 1: accel -> PCI BDF */
+	snprintf(path, sizeof(path), "/sys/class/misc/%s/device", accel_name);
+	n = readlink(path, link, sizeof(link) - 1);
+	if (n < 0)
+		return -1;
+	link[n] = '\0';
+	snprintf(pci_bdf, sizeof(pci_bdf), "%s", strrchr(link, '/') + 1);
+
+	/* Step 2: find memdev with matching PCI BDF */
+	dir = opendir("/sys/bus/cxl/devices");
+	if (!dir)
+		return -1;
+	while ((de = readdir(dir))) {
+		if (strncmp(de->d_name, "mem", 3) || !de->d_name[3])
+			continue;
+		snprintf(path, sizeof(path),
+			 "/sys/bus/cxl/devices/%s", de->d_name);
+		n = readlink(path, link, sizeof(link) - 1);
+		if (n < 0)
+			continue;
+		link[n] = '\0';
+		if (strstr(link, pci_bdf)) {
+			snprintf(memdev, sizeof(memdev), "%s", de->d_name);
+			break;
+		}
+	}
+	closedir(dir);
+	if (!memdev[0])
+		return -1;
+
+	/* Step 3: find endpoint whose uport ends with our memdev */
+	dir = opendir("/sys/bus/cxl/devices");
+	if (!dir)
+		return -1;
+	while ((de = readdir(dir))) {
+		char *p;
+
+		if (strncmp(de->d_name, "endpoint", 8))
+			continue;
+		snprintf(path, sizeof(path),
+			 "/sys/bus/cxl/devices/%s/uport", de->d_name);
+		n = readlink(path, link, sizeof(link) - 1);
+		if (n < 0)
+			continue;
+		link[n] = '\0';
+		p = strrchr(link, '/');
+		if (p && !strcmp(p + 1, memdev)) {
+			snprintf(ep_decoder, sizeof(ep_decoder),
+				 "decoder%s.0", de->d_name + 8);
+			break;
+		}
+	}
+	closedir(dir);
+	if (!ep_decoder[0])
+		return -1;
+
+	/* Step 4: find region whose target0 matches our decoder */
+	dir = opendir("/sys/bus/cxl/devices");
+	if (!dir)
+		return -1;
+	while ((de = readdir(dir))) {
+		FILE *fp;
+		char val[64];
+
+		if (strncmp(de->d_name, "region", 6))
+			continue;
+		snprintf(path, sizeof(path),
+			 "/sys/bus/cxl/devices/%s/target0", de->d_name);
+		fp = fopen(path, "r");
+		if (!fp)
+			continue;
+		if (fscanf(fp, "%63s", val) == 1) {
+			if (!strcmp(val, ep_decoder)) {
+				snprintf(dax_path, len,
+					 "/dev/dax%s.0", de->d_name + 6);
+				fclose(fp);
+				closedir(dir);
+				return 0;
+			}
+		}
+		fclose(fp);
+	}
+	closedir(dir);
+	return -1;
+}
+
 static void fill_pattern(uint8_t *buf, size_t size)
 {
 	const char *pattern = "CXL type-2 accelerator test data. ";
@@ -138,7 +240,8 @@ static void fill_pattern(uint8_t *buf, size_t size)
 int main(int argc, char **argv)
 {
 	const char *accel_path = DEFAULT_ACCEL_DEV;
-	const char *dax_path = DEFAULT_DAX_DEV;
+	const char *dax_path = NULL;
+	char dax_path_buf[64];
 	const char *input_file = NULL;
 	size_t data_size = DEFAULT_SIZE_KB * 1024;
 	size_t region_size, max_out;
@@ -177,6 +280,17 @@ int main(int argc, char **argv)
 	if (accel_fd < 0) {
 		perror(accel_path);
 		return 1;
+	}
+
+	if (!dax_path) {
+		if (find_dax_for_accel(accel_path, dax_path_buf,
+				       sizeof(dax_path_buf))) {
+			fprintf(stderr, "Cannot find DAX device for %s\n",
+				accel_path);
+			goto out_accel;
+		}
+		dax_path = dax_path_buf;
+		printf("Using DAX device: %s\n", dax_path);
 	}
 
 	/* Open and mmap DAX device */
