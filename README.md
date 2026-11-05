@@ -192,9 +192,9 @@ Kernel 7.3:
 - [Pre-built Linux tree with all patches applied](https://github.com/legoater/linux/commits/vfio-7.3/)
 
 Kernel 7.4:
-- [(v15) PCI/CXL: Add CXL reset support for Type 2 devices](https://lore.kernel.org/all/20261011021422.3428136-2-smadhavan@nvidia.com)
-- [(v6) vfio/pci: Add CXL Type-2 device passthrough](https://lore.kernel.org/all/20261016161839.2765592-2-mhonap@nvidia.com)
-- [(v3) Add SMCCC cache clean/invalidate provider](https://lore.kernel.org/all/20260910082142.1522865-2-smadhavan@nvidia.com)
+- [(v15) PCI/CXL: Add CXL reset support for Type 2 devices](https://lore.kernel.org/all/20261011021422.3428136-1-smadhavan@nvidia.com)
+- [(v6) vfio/pci: Add CXL Type-2 device passthrough](https://lore.kernel.org/all/20261016161839.2765592-1-mhonap@nvidia.com)
+- [(v4) Add SMCCC cache clean/invalidate provider](https://lore.kernel.org/all/20261013070205.3566865-1-smadhavan@nvidia.com)
 - [Pre-built Linux tree with all series applied and extras](https://github.com/legoater/linux/commits/vfio-7.4/)
 
 QEMU:
